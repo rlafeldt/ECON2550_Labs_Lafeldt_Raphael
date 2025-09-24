@@ -398,6 +398,30 @@ There is website that host a collection of beautiful charts you might want to vi
 
 ```{r, echo=T, eval=T}
 #| label: r graph gallery replication 1
+#| # Heatmap of cps numeric correlations
+library(tidyverse)
+
+num_vars <- c("wage", "hrslastwk", "educ", "earnwk")
+
+cps_num <- cps |>
+  select(any_of(num_vars)) |>
+  mutate(across(everything(), as.numeric))
+
+corr_mat <- cor(cps_num, use = "pairwise.complete.obs")
+corr_df  <- as.data.frame(as.table(corr_mat)) |>
+  rename(var_x = Var1, var_y = Var2, r = Freq)
+
+ggplot(corr_df, aes(var_x, var_y, fill = r)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.2f", r)), size = 3) +
+  scale_fill_gradient2(limits = c(-1, 1)) +
+  coord_equal() +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(title = "cps: Correlation Heatmap",
+       x = NULL, y = NULL, fill = "r")
+
 
 ```
 
@@ -405,6 +429,59 @@ There is website that host a collection of beautiful charts you might want to vi
 
 ```{r, echo=T, eval=T}
 #| label: r graph gallery replication 2
+
+# Radar chart: mean weekly earnings, hours, and education by gender
+library(tidyverse)
+library(fmsb)
+library(scales)
+
+sex_col   <- "gender"      # Male / Female
+wage_col  <- "earnwk"      # weekly earnings
+hours_col <- "hrslastwk"   # hours worked last week
+educ_col  <- "educ"        # years of education
+
+# ---- group summaries
+sum_tab <- cps |>
+  filter(!is.na(.data[[sex_col]])) |>
+  summarise(
+    .by = .data[[sex_col]],
+    Weekly_Earnings = mean(.data[[wage_col]],  na.rm = TRUE),
+    Hours_Last_Week = mean(.data[[hours_col]], na.rm = TRUE),
+    Education_Years = mean(.data[[educ_col]],  na.rm = TRUE)
+  ) |>
+  rename(Group = 1) |>
+  column_to_rownames("Group")
+
+# ---- rescale 0–100
+scaled <- sum_tab |>
+  mutate(across(everything(), ~ rescale(.x, to = c(0, 100)))) |>
+  as.data.frame()
+
+# ---- fmsb requires first 2 rows = max/min with IDENTICAL column names
+bounds <- data.frame(
+  matrix(c(rep(100, ncol(scaled)), rep(0, ncol(scaled))),
+         nrow = 2, byrow = TRUE)
+)
+colnames(bounds) <- colnames(scaled)
+rownames(bounds) <- c("max", "min")
+
+rad_dat <- rbind(bounds, scaled)
+
+# ---- plot
+cols <- scales::alpha(hcl(h = seq(15, 375, length.out = nrow(scaled)+1)[1:nrow(scaled)],
+                          c = 70, l = 60), 0.35)
+
+op <- par(mar = c(1,1,2,1))
+radarchart(
+  rad_dat,
+  pfcol = cols, plwd = 2,
+  cglcol = "grey80", cglty = 1, cglwd = 0.8,
+  axislabcol = "grey40", vlcex = 0.9,
+  title = "cps: Radar of Mean Weekly Earnings, Hours, Education by Gender"
+)
+legend("topright", legend = rownames(scaled), bty = "n", cex = 0.85, fill = cols)
+par(op)
+
 
 ```
 
@@ -441,7 +518,7 @@ To submit your assignment:
 # Grading
 
 | Component                                                          | Points |
-|:---------------------------------------------------------|:-------------|
+|:-------------------------------------------------------------------|:-------|
 | Exercise 1                                                         | 5      |
 | Exercise 2                                                         | 5      |
 | Exercise 3                                                         | 80     |
